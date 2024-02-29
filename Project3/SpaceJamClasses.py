@@ -71,6 +71,42 @@ class Player(ShowBase):
 		rate=.5
 		self.model.setH(self.model.getH()-rate)
 		return Task.cont
+	def UpTurn(self,keyDown):
+		if keyDown:
+			self.s.taskMgr.add(self.applyUpTurn,'up-turn')
+		else:
+			self.s.taskMgr.remove('up-turn')
+	def applyUpTurn(self,task):
+		rate=.5
+		self.model.setP(self.model.getP()+rate)
+		return Task.cont
+	def DownTurn(self,keyDown):
+		if keyDown:
+			self.s.taskMgr.add(self.applyDownTurn,'down-turn')
+		else:
+			self.s.taskMgr.remove('down-turn')
+	def applyDownTurn(self,task):
+		rate=.5
+		self.model.setP(self.model.getP()-rate)
+		return Task.cont
+	def LeftRoll(self,keyDown):
+		if keyDown:
+			self.s.taskMgr.add(self.applyLeftRoll,'left-roll')
+		else:
+			self.s.taskMgr.remove('left-roll')
+	def applyLeftRoll(self,task):
+		rate=.5
+		self.model.setR(self.model.getR()-rate)
+		return Task.cont
+	def RightRoll(self,keyDown):
+		if keyDown:
+			self.s.taskMgr.add(self.applyRightRoll,'right-roll')
+		else:
+			self.s.taskMgr.remove('right-roll')
+	def applyRightRoll(self,task):
+		rate=.5
+		self.model.setR(self.model.getR()+rate)
+		return Task.cont
 class SpaceStation(ShowBase):
 	def __init__(self,posVec:Vec3,scaleVec:float):
 		self.model=base.loader.loadModel("./Assets/Space Station/SpaceStation1B/spaceStation.x")
