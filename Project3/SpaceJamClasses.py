@@ -5,8 +5,8 @@ from direct.actor.Actor import Actor
 from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import Point3
 from panda3d.core import Vec3
-
-class Celestial(ShowBase):
+from CollideObjectBase import *
+class Celestial(SphereCollideObject,ShowBase):
 	def __init__(self,posVec:Vec3,scaleVec:float,texPath:str):
 			self.model=base.loader.loadModel("./Assets/Planets/protoPlanet.x")
 			self.model.reparentTo(base.render)
@@ -14,14 +14,15 @@ class Celestial(ShowBase):
 			self.model.setScale(scaleVec)
 			self.model.setTexture(loader.loadTexture(texPath),1)
 			#self.model.setName("")
-class Universe(ShowBase):
+class Universe(InverseSphereCollideObject,ShowBase):
 	def __init__(self,posVec:Vec3,scaleVec:float):
-			self.model=base.loader.loadModel("./Assets/Universe/Universe.x")
-			self.model.reparentTo(base.render)
-			self.model.setPos(posVec)
-			self.model.setScale(scaleVec)
-			self.model.setTexture(loader.loadTexture("./Assets/Universe/Universe-fors8M4.png"),1)
-class Spaceship(ShowBase):
+		super(Universe,self).__init__(base.loader,"./Assets/Universe/Universe.x",self.model,"universe",Vec3(0,0,0),.9*scaleVec)
+		self.model=base.loader.loadModel("./Assets/Universe/Universe.x")
+		self.model.reparentTo(base.render)
+		self.model.setPos(posVec)
+		self.model.setScale(scaleVec)
+		self.model.setTexture(loader.loadTexture("./Assets/Universe/Universe-fors8M4.png"),1)
+class Spaceship(SphereCollideObject,ShowBase):
 	def __init__(self,posVec:Vec3,scaleVec:float,modelPath,texturePath):
 		if type(modelPath) is str:
 			self.model=base.loader.loadModel(modelPath)
@@ -31,8 +32,9 @@ class Spaceship(ShowBase):
 		self.model.setPos(posVec)
 		self.model.setScale(scaleVec)
 		self.model.setTexture(loader.loadTexture(texturePath),1)
-class Player(ShowBase):
+class Player(InverseSphereCollideObject,ShowBase):
 	def __init__(self,posVec:Vec3,scaleVec:float,modelPath,texturePath,s):
+		super(Player,self).__init__(base.loader,modelPath,self.model,"psh",posVec,2*scaleVec)
 		if type(modelPath) is str:
 			self.model=base.loader.loadModel(modelPath)
 		else:
@@ -107,14 +109,15 @@ class Player(ShowBase):
 		rate=.5
 		self.model.setR(self.model.getR()+rate)
 		return Task.cont
-class SpaceStation(ShowBase):
+class SpaceStation(CapsuleCollideObject):
 	def __init__(self,posVec:Vec3,scaleVec:float):
+		super(SpaceStation,self).__init__(loader,"./Assets/Space Station/SpaceStation1B/spaceStation.x",model,"SpaceStation",1,-1,5,1,-1,-5,100)
 		self.model=base.loader.loadModel("./Assets/Space Station/SpaceStation1B/spaceStation.x")
 		self.model.reparentTo(base.render)
 		self.model.setPos(posVec)
 		self.model.setScale(scaleVec)
 		self.model.setTexture(loader.loadTexture("./Assets/Space Station/SpaceStation1B/SpaceStation1_Dif2.png"),1)
-class Drone(ShowBase):
+class Drone(SphereCollideObject,ShowBase):
 	droneCount = 0
 	def __init__(self,posVec:Vec3,scaleVec:float):
 		self.droneCount+=1

@@ -3,15 +3,21 @@ from direct.showbase.ShowBase import ShowBase
 from direct.task import Task
 from direct.actor.Actor import Actor
 from direct.interval.IntervalGlobal import Sequence
-from panda3d.core import Point3
+from panda3d.core import Point3,Vec3,CollisionTraverser,CollisionHanderPusher
+from CollideObjectBase import *
 from SpaceJamClasses import *
-from panda3d.core import Vec3
 import DefensePaths
 fullCycle=10
 droneSize=50
 class SpaceJam(ShowBase):
 	def __init__(self):
 		ShowBase.__init__(self)
+		self.cTrav=CollisionTraverser()
+		self.cTrav.traverse(self.render)
+		self.pusher=CollisionHanderPusher()
+		self.pusher.addCollider(self.PlayerSpaceship.collisionNode,self.PlayerSpaceship.modelNode)
+		self.pusher.addCollider(self.PlayerSpaceship.collisionNode,self.pusher)
+		self.cTrav.showCollisions(self.render)
 		self.disableMouse()
 		self.camera.setPos(0,0,0)
 		self.Drones=[]
