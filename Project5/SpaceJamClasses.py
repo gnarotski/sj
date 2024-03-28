@@ -33,13 +33,13 @@ class Spaceship(SphereCollideObject):
 		self.model.setPos(posVec)
 		self.model.setScale(scaleVec)
 		self.model.setTexture(loader.loadTexture(texturePath),1)
-class Player(SphereCollideObject):
+class Player(InverseSphereCollideObject):
 	def __init__(self,posVec:Vec3,scaleVec:float,modelPath,texturePath,s):
 		if type(modelPath) is str:
 			self.model=base.loader.loadModel(modelPath)
 		else:
 			self.model=modelPath
-		super(Player,self).__init__(base.loader,modelPath,self.model,"psh",posVec,8*scaleVec)
+		super(Player,self).__init__(base.loader,modelPath,self.model,"psh",Vec3(0,0,0),8*scaleVec)
 		self.model.reparentTo(base.render)
 		self.model.setPos(posVec)
 		self.model.setScale(scaleVec)
