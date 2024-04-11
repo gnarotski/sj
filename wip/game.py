@@ -1,18 +1,26 @@
 from direct.gui.OnscreenImage import OnscreenImage
 from direct.gui.OnscreenText import OnscreenText
+
 from direct.interval.LerpInterval import LerpFunc
 from direct.showbase.ShowBase import ShowBase
 from direct.task import Task
 
 from panda3d.core import TextureStage
 from panda3d.core import CardMaker
+from panda3d.core import Point3
 from panda3d.core import Vec3
 
 import DefensePaths
 import keyboard
+import random
 import math
 import time
 
+def getRandomPoint():
+	return (random.uniform(-2000, 2000),random.uniform(-2000, 2000),random.uniform(-2000, 2000))
+def getDistance(model,point):
+	[x,y,z]=model.getPos()
+	return math.sqrt(((x-point[0])**2)+((y-point[1])**2)+((z-point[2])**2))
 class Game(ShowBase):
 	textures = {
 		"universe": "./textures/Universe-fors8M4.png",
@@ -77,14 +85,21 @@ class Game(ShowBase):
 			if Game.settings["display hud"]:
 				self.Hud = OnscreenImage(image= Game.textures["Hud"], pos=(0, 0, 0),scale=.1)
 				self.Hud.setTransparency(1)
-		self.press_g_to_change_fire_mode = OnscreenText(text='press \'g\' to change fire mode', pos=(-1, .8), fg=(1,1,1,1), scale=0.07)
+		self.press_g_to_change_fire_mode = OnscreenText(text='press \'g\' to change fire mode', pos=(-1, .8), fg=(1,1,1,1), scale=0.07,mayChange=1)
 		self.fire_mode = OnscreenText(text='Fire mode: [3 round burst]', pos=(-1, .9), fg=(1,1,1,1), scale=0.07)
-		self.fm=1
 		self.phaser_bolts=[]
+		self.wanderers=[Wanderer(10),Wanderer(10),Wanderer(10),Wanderer(10),Wanderer(10),Wanderer(10),Wanderer(10),Wanderer(10),Wanderer(10)]
 		self.lastFired = 0
 		self.setupHotkeys()
 		self.setupBox()
-		self.setupPlanets()
+		self.quickplanets([
+			((1000,0,0),"ceres"),
+			((-1000,0,0),"eris"),
+			((0,1000,0),"haumea"),
+			((0,-1000,0),"jupiter"),
+			((0,0,1000),"neptune"),
+			((0,0,-1000),"makemake")
+		])
 		self.setupSpaceStation()
 		self.setupDrones()
 		self.setupPlayer()
@@ -94,24 +109,20 @@ class Game(ShowBase):
 		self.setBackgroundColor(Game.colors["hot pink"])
 		self.universe		= Item(Game.center, Game.settings["universe size"], Game.models["inner sphere"], Game.textures["universe"])
 		self.universe_outer	= Item(Game.center, Game.settings["universe size"], Game.models["outer sphere"], Game.textures["universe"])
-	def setupPlanets(self):
+	def quickplanets(self,pdat):
 		self.planets=[]
-		self.planets.append(Item((1000,0,0), 100, Game.models["outer sphere"], Game.textures["ceres"]))
-		self.planets.append(Item((-1000,0,0), 100, Game.models["outer sphere"], Game.textures["eris"]))
-		self.planets.append(Item((0,1000,0), 100, Game.models["outer sphere"], Game.textures["haumea"]))
-		self.planets.append(Item((0,-1000,0), 100, Game.models["outer sphere"], Game.textures["jupiter"]))
-		self.planets.append(Item((0,0,1000), 100, Game.models["outer sphere"], Game.textures["neptune"]))
-		self.planets.append(Item((0,0,-1000), 100, Game.models["outer sphere"], Game.textures["makemake"]))
+		for data in pdat:
+			self.planets.append([Item(data[0], 100, Game.models["outer sphere"], Game.textures[data[1]]),100])
 	def setupSpaceStation(self):
 		self.spaceStation=Item((1000,0,1000), 10, Game.models["space station"], Game.textures["space station"])
 	def setupDrones(self):
 		self.drones=[]
-		self.drawCloudDefense(self.planets[0],Game.drone_cycle)
-		self.drawBaseballSeams(self.planets[1],1,30)
-		self.drawXY(self.planets[2],Game.drone_cycle)
-		self.drawXZ(self.planets[3],Game.drone_cycle)
-		self.drawYZ(self.planets[4],Game.drone_cycle)
-		self.drawCloudDefense(self.planets[5],Game.drone_cycle)
+		self.drawCloudDefense(self.planets[0][0],Game.drone_cycle)
+		self.drawBaseballSeams(self.planets[1][0],1,30)
+		self.drawXY(self.planets[2][0],Game.drone_cycle)
+		self.drawXZ(self.planets[3][0],Game.drone_cycle)
+		self.drawYZ(self.planets[4][0],Game.drone_cycle)
+		self.drawCloudDefense(self.planets[5][0],Game.drone_cycle)
 	def drawCloudDefense(self, celestial,count):
 		for j in range(count):
 			unitVec = DefensePaths.Cloud()
@@ -146,11 +157,7 @@ class Game(ShowBase):
 		self.player			= Item(Game.center, 1, Game.models["Khan"], Game.textures["Khan"])
 		self.player.model.setP(self.player.model.getP()+90)
 	def fire(self):
-		if (len(self.phaser_bolts)<Game.settings["max phasers"] or Game.settings["max phasers"]<0) and time.time() - self.lastFired >= Game.settings["phasers cooldown"]:
-			self.lastFired = time.time()
-			self.player.model.setP(self.player.model.getP()-90)
-			self.phaser_bolts.append(Phaser(self.player.model.getPos(), self.player.model.getHpr(), self.player.trajectory*Game.settings["phaser speed"]))
-			self.player.model.setP(self.player.model.getP()+90)
+		self.phaser_bolts.append(Phaser(self.player.model.getPos(), [Vec3(item[0],item[1]-90,item[2]) for item in [list(self.player.model.getHpr())]][0], self.player.trajectory*Game.settings["phaser speed"]))
 	def getSpaceshipTrajectory(self):
 		self.player.model.setP(self.player.model.getP()-90)
 		self.player.trajectory=self.render.getRelativeVector(self.player.model,Vec3.forward())
@@ -163,18 +170,35 @@ class Game(ShowBase):
 			self.camera.setPos(self.player.model.getPos())
 			self.camera.setHpr(self.player.model.getHpr())
 			self.camera.setP(self.player.model.getP()+270)
+		death=[]
 		boom=[]
+		for wanderer in self.wanderers:
+			wanderer.loop()
 		if len(self.phaser_bolts)>0:
 			for bolt in self.phaser_bolts:
 				bolt.model.setFluidPos(bolt.model.getPos()+bolt.trajectory)
 				for drone in self.drones:
 					if drone.model.getDistance(bolt.model)<Game.drone_size*2.3:
-						boom.append((bolt,drone))
+						death.append(bolt)
+						boom.append(drone)
+				for planet in self.planets:
+					if planet[0].model.getDistance(bolt.model)<planet[1]*1.1:
+						boom.append(bolt)
+						planet[0].model.setPos(planet[0].model.getPos()+bolt.trajectory*50)
+						planet[1]-=10
+				if self.spaceStation.model.getDistance(bolt.model)<self.spaceStation.model.getScale()*17:
+					boom.append(bolt)
+					if 0<self.spaceStation.model.getScale():
+						self.spaceStation.model.setScale(self.spaceStation.model.getScale()-1)
 				if self.player.model.getDistance(bolt.model)>Game.settings["phaser kill distance"]:
 					bolt.kill()
+		for planet in self.planets:
+			if planet[1]<planet[0].model.getScale():
+				planet[0].model.setScale(planet[0].model.getScale()-1)
+		for target in death:
+			target.kill()
 		for target in boom:
-			target[0].kill()
-			target[1].kaboom()
+			target.kaboom()
 		self.universe.model.setP(self.universe.model.getP()+Game.settings["universe rotation"])
 		self.spaceStation.model.setR(self.spaceStation.model.getR()+.3)
 		self.killDeadDestructables()
@@ -215,29 +239,23 @@ class Game(ShowBase):
 			keyboard.add_hotkey('z', self.toggleHud)
 		keyboard.add_hotkey('g', self.nextFire)
 	def nextFire(self):
-		if self.fm == 1:
-			self.fire_mode.removeNode()
-			self.fire_mode = OnscreenText(text='Fire mode: [rapid fire]', pos=(-1, .9), fg=(1,1,1,1), scale=0.07)
+		if self.fire_mode.text=='Fire mode: [3 round burst]':
+			self.fire_mode.text='Fire mode: [rapid fire]'
 			Game.settings["max phasers"] = -1
 			Game.settings["phasers cooldown"] = .1
-			self.fm=2
-		elif self.fm == 2:
-			self.fire_mode.removeNode()
-			self.fire_mode = OnscreenText(text='Fire mode: [single]', pos=(-1, .9), fg=(1,1,1,1), scale=0.07)
+		elif self.fire_mode.text=='Fire mode: [rapid fire]':
+			self.fire_mode.text='Fire mode: [single]'
 			Game.settings["max phasers"] = -1
 			Game.settings["phasers cooldown"] = 2
-			self.fm=3
-		elif self.fm == 3:
-			self.fire_mode.removeNode()
-			self.fire_mode = OnscreenText(text='Fire mode: [3 round burst]', pos=(-1, .9), fg=(1,1,1,1), scale=0.07)
+		elif self.fire_mode.text=='Fire mode: [single]':
+			self.fire_mode.text='Fire mode: [3 round burst]'
 			Game.settings["max phasers"] = 3
 			Game.settings["phasers cooldown"] = .1
-			self.fm=1
 	def toggleHud(self):
 		Game.settings["display hud"] = not Game.settings["display hud"]
 		if Game.settings["spaceship camera"]:
 			if Game.settings["display hud"]:
-				self.Hud = OnscreenImage(image= Game.textures["Hud"], pos=(0, 0, 0),scale=.5)
+				self.Hud = OnscreenImage(image= Game.textures["Hud"], pos=(0, 0, 0),scale=.1)
 				self.Hud.setTransparency(1)
 			else:
 				self.Hud.destroy()
@@ -251,12 +269,14 @@ class Game(ShowBase):
 			if ((self.spaceStation.model.getPos()-self.player.model.getPos()).length()) < 150:
 				self.player.model.setFluidPos(self.player.model.getPos()+self.player.trajectory*300)
 			for planet in self.planets:
-				if self.pitec(self.player,planet):
-					self.player.model.setFluidPos(self.player.model.getPos()+((planet.model.getPos()-self.player.model.getPos()).normalize()*Game.settings["spaceship thrust"]))
+				if self.pitec(self.player,planet[0]):
+					self.player.model.setFluidPos(self.player.model.getPos()+((planet[0].model.getPos()-self.player.model.getPos()).normalize()*Game.settings["spaceship thrust"]))
 			if self.pitem(self.player,self.universe):
 				self.player.model.setFluidPos(Game.center)
 		if keyboard.is_pressed("f"):
-			self.fire()
+			if (len(self.phaser_bolts)<Game.settings["max phasers"] or Game.settings["max phasers"]<0) and time.time() - self.lastFired >= Game.settings["phasers cooldown"]:
+				self.lastFired = time.time()
+				self.fire()
 		if keyboard.is_pressed("a"):
 			self.player.model.setH(self.player.model.getH()+Game.settings["spaceship rotation rate"])
 			if(self.player.model.getH()>360):
@@ -323,6 +343,19 @@ class Drone(Item,Destructable):
 		self.j=j
 		self.lastJumped=0
 		self.model.setBillboardPointWorld()
+class Wanderer(Item,Destructable):
+	def __init__(self,size:float):
+		super(Wanderer,self).__init__(getRandomPoint(),size,Game.models["outer sphere"], Game.textures["missing texture"])
+		self.target=getRandomPoint()
+		self.model.setBillboardPointWorld()
+	def loop(self):
+		self.model.lookAt(self.target)
+		self.trajectory=base.render.getRelativeVector(self.model,Vec3.forward())
+		self.trajectory.normalize()
+		self.model.setFluidPos(self.model.getPos()+self.trajectory*Game.settings["spaceship thrust"])
+		if getDistance(self.model,self.target)<100:
+			self.target=getRandomPoint()
+		self.model.lookAt(app.player.model)
 class Explosion():
 	def __init__(self,posVec:Vec3):
 		self.card=Card(posVec,10,Game.textures["sparkle"])
@@ -331,6 +364,6 @@ class Explosion():
 		self.card.model.setScale(self.card.model.getScale()*.9)
 		if math.floor(completion):
 			self.card.model.removeNode()
-	
+
 app = Game()
 app.run()
