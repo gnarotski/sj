@@ -5,7 +5,9 @@ from direct.interval.LerpInterval import LerpFunc
 from direct.showbase.ShowBase import ShowBase
 from direct.task import Task
 
+from panda3d.core import KeyboardButton
 from panda3d.core import TextureStage
+from panda3d.core import InputDevice
 from panda3d.core import CardMaker
 from panda3d.core import Point3
 from panda3d.core import Vec3
@@ -20,7 +22,12 @@ import sys
 import socket
 import threading
 sType="idk"
-gamedata=[]
+gamedata=""
+newgamedata="|||"
+def group(lst, n):
+	if len(lst)%n != 0:
+		raise ValueError("{} is not a multiple of {}".format(len(lst),n))
+	return list(zip(*[iter(lst)]*n))
 def getRandomPoint():
 	return (random.uniform(-2000, 2000),random.uniform(-2000, 2000),random.uniform(-2000, 2000))
 def getDistance(model,point):
@@ -160,6 +167,7 @@ class Game(ShowBase):
 			self.drones.append(Drone(position,Game.drone_size,"YZ",celestial,j))
 	def setupPlayer(self):
 		self.player			= Item(Game.center, 1, Game.models["Khan"], Game.textures["Khan"])
+		self.player2		= Item(Game.center, 1, Game.models["Khan"], Game.textures["Khan"])
 		self.player.model.setP(self.player.model.getP()+90)
 	def fire(self):
 		self.phaser_bolts.append(Phaser(self.player.model.getPos(), [Vec3(item[0],item[1]-90,item[2]) for item in [list(self.player.model.getHpr())]][0], self.player.trajectory*Game.settings["phaser speed"]))
@@ -208,43 +216,45 @@ class Game(ShowBase):
 		self.spaceStation.model.setR(self.spaceStation.model.getR()+.3)
 		self.killDeadDestructables()
 		global gamedata
+		self.apply_data(newgamedata)
 		gamedata=self.datify()
 		return Task.cont
 	def droneOrbitals(self,task):
-		for drone in self.drones:
-			if drone.droneType=="cloud" and time.time() - drone.lastJumped >= Game.settings["cloud drone jump time"]:
-				unitVec = DefensePaths.Cloud()
-				unitVec.normalize()
-				drone.model.setPos((unitVec*(drone.core.model.getScale()[0]*1.5))+drone.core.model.getPos())
-				drone.lastJumped = time.time()
-			if drone.droneType=="baseball":
-				drone.j+=Game.settings["drone orbit speed"]
-				unitVec = DefensePaths.BaseballSeams(drone.j,Game.drone_cycle,B=0.4)
-				unitVec.normalize()
-				drone.model.setFluidPos(unitVec*drone.core.model.getScale()[0]*2+drone.core.model.getPos())
-			if drone.droneType=="XY":
-				drone.j+=Game.settings["drone orbit speed"]
-				unitVec = DefensePaths.XY(drone.j,Game.drone_cycle)
-				unitVec.normalize()
-				drone.model.setFluidPos((unitVec*(drone.core.model.getScale()[0]*1.5))+drone.core.model.getPos())
-			if drone.droneType=="XZ":
-				drone.j+=Game.settings["drone orbit speed"]
-				unitVec = DefensePaths.XZ(drone.j,Game.drone_cycle)
-				unitVec.normalize()
-				drone.model.setFluidPos((unitVec*(drone.core.model.getScale()[0]*1.5))+drone.core.model.getPos())
-			if drone.droneType=="YZ":
-				drone.j+=Game.settings["drone orbit speed"]
-				unitVec = DefensePaths.YZ(drone.j,Game.drone_cycle)
-				unitVec.normalize()
-				drone.model.setFluidPos((unitVec*(drone.core.model.getScale()[0]*1.5))+drone.core.model.getPos())
+		if sType=="server":
+			for drone in self.drones:
+				if drone.droneType=="cloud" and time.time() - drone.lastJumped >= Game.settings["cloud drone jump time"]:
+					unitVec = DefensePaths.Cloud()
+					unitVec.normalize()
+					drone.model.setPos((unitVec*(drone.core.model.getScale()[0]*1.5))+drone.core.model.getPos())
+					drone.lastJumped = time.time()
+				if drone.droneType=="baseball":
+					drone.j+=Game.settings["drone orbit speed"]
+					unitVec = DefensePaths.BaseballSeams(drone.j,Game.drone_cycle,B=0.4)
+					unitVec.normalize()
+					drone.model.setFluidPos(unitVec*drone.core.model.getScale()[0]*2+drone.core.model.getPos())
+				if drone.droneType=="XY":
+					drone.j+=Game.settings["drone orbit speed"]
+					unitVec = DefensePaths.XY(drone.j,Game.drone_cycle)
+					unitVec.normalize()
+					drone.model.setFluidPos((unitVec*(drone.core.model.getScale()[0]*1.5))+drone.core.model.getPos())
+				if drone.droneType=="XZ":
+					drone.j+=Game.settings["drone orbit speed"]
+					unitVec = DefensePaths.XZ(drone.j,Game.drone_cycle)
+					unitVec.normalize()
+					drone.model.setFluidPos((unitVec*(drone.core.model.getScale()[0]*1.5))+drone.core.model.getPos())
+				if drone.droneType=="YZ":
+					drone.j+=Game.settings["drone orbit speed"]
+					unitVec = DefensePaths.YZ(drone.j,Game.drone_cycle)
+					unitVec.normalize()
+					drone.model.setFluidPos((unitVec*(drone.core.model.getScale()[0]*1.5))+drone.core.model.getPos())
 		return Task.cont
 	def killDeadDestructables(self):
 		self.phaser_bolts=[bolt for bolt in self.phaser_bolts if bolt.live]
 		self.drones=[drone for drone in self.drones if drone.live]
 	def setupHotkeys(self):
 		if Game.settings["toggle hud"]:
-			keyboard.add_hotkey('z', self.toggleHud)
-		keyboard.add_hotkey('g', self.nextFire)
+			self.accept('z', self.toggleHud)
+		self.accept('g', self.nextFire)
 	def nextFire(self):
 		if self.fire_mode.text=='Fire mode: [3 round burst]':
 			self.fire_mode.text='Fire mode: [rapid fire]'
@@ -271,7 +281,18 @@ class Game(ShowBase):
 	def pitem(self,item1,item2):
 		return not ((item2.model.getPos()-item1.model.getPos()).length()<item2.model.getScale()+item1.model.getScale()-Game.settings["spaceship collision buffer"])
 	def keyActions(self):
-		if keyboard.is_pressed("space"):
+		is_down = base.mouseWatcherNode.is_button_down
+		keys={
+			'space':KeyboardButton.ascii_key(' '),
+			'f':KeyboardButton.ascii_key('f'),
+			'a':KeyboardButton.ascii_key('a'),
+			'd':KeyboardButton.ascii_key('d'),
+			'w':KeyboardButton.ascii_key('w'),
+			's':KeyboardButton.ascii_key('s'),
+			'q':KeyboardButton.ascii_key('q'),
+			'e':KeyboardButton.ascii_key('e')
+		}
+		if is_down(keys['space']):
 			self.player.model.setFluidPos(self.player.model.getPos()+self.player.trajectory*Game.settings["spaceship thrust"])
 			if ((self.spaceStation.model.getPos()-self.player.model.getPos()).length()) < 150:
 				self.player.model.setFluidPos(self.player.model.getPos()+self.player.trajectory*300)
@@ -280,31 +301,31 @@ class Game(ShowBase):
 					self.player.model.setFluidPos(self.player.model.getPos()+((planet[0].model.getPos()-self.player.model.getPos()).normalize()*Game.settings["spaceship thrust"]))
 			if self.pitem(self.player,self.universe):
 				self.player.model.setFluidPos(Game.center)
-		if keyboard.is_pressed("f"):
+		if is_down(keys['f']):
 			if (len(self.phaser_bolts)<Game.settings["max phasers"] or Game.settings["max phasers"]<0) and time.time() - self.lastFired >= Game.settings["phasers cooldown"]:
 				self.lastFired = time.time()
 				self.fire()
-		if keyboard.is_pressed("a"):
+		if is_down(keys['a']):
 			self.player.model.setH(self.player.model.getH()+Game.settings["spaceship rotation rate"])
 			if(self.player.model.getH()>360):
 				self.player.model.setH(self.player.model.getH()-360)
-		if keyboard.is_pressed("d"):
+		if is_down(keys['d']):
 			self.player.model.setH(self.player.model.getH()-Game.settings["spaceship rotation rate"])
 			if(self.player.model.getH()<0):
 				self.player.model.setH(self.player.model.getH()+360)
-		if keyboard.is_pressed("w"):
+		if is_down(keys['w']):
 			self.player.model.setP(self.player.model.getP()+Game.settings["spaceship rotation rate"])
 			if(self.player.model.getP()>360):
 				self.player.model.setP(self.player.model.getP()-360)
-		if keyboard.is_pressed("s"):
+		if is_down(keys['s']):
 			self.player.model.setP(self.player.model.getP()-Game.settings["spaceship rotation rate"])
 			if(self.player.model.getP()<0):
 				self.player.model.setP(self.player.model.getP()+360)
-		if keyboard.is_pressed("q"):
+		if is_down(keys['q']):
 			self.player.model.setR(self.player.model.getR()-Game.settings["spaceship rotation rate"])
 			if(self.player.model.getR()<0):
 				self.player.model.setR(self.player.model.getR()+360)
-		if keyboard.is_pressed("e"):
+		if is_down(keys['e']):
 			self.player.model.setR(self.player.model.getR()+Game.settings["spaceship rotation rate"])
 			if(self.player.model.getR()>360):
 				self.player.model.setR(self.player.model.getR()-360)
@@ -326,6 +347,29 @@ class Game(ShowBase):
 		#need wanderers xyz
 		#need planets xyz, size
 		#need drones xyz,hpr
+	def apply_data(self, data):
+		#print(data)
+		data_chunks=data.split("|")
+		if len(data_chunks[0]) == 0:
+			return
+		player_poshpr=[float(datapoint) for datapoint in data_chunks[0].strip('][').split(', ')]
+		wanderers_pos=group([float(datapoint) for datapoint in data_chunks[1].strip('][').split(', ')],3)
+		planets_poss=group([float(datapoint) for datapoint in data_chunks[2].strip('][').split(', ')],4)
+		drones_poshpr=group([float(datapoint) for datapoint in data_chunks[3].strip('][').split(', ')],6)
+		self.player2.model.setPos(player_poshpr[0],player_poshpr[1],player_poshpr[2])
+		self.player2.model.setHpr(player_poshpr[3],player_poshpr[4],player_poshpr[5])
+		if sType=="client":
+			for index,wanderer in enumerate(self.wanderers):
+				wanderer.model.setPos(wanderers_pos[index])
+			for index,planet in enumerate(self.planets):
+				planet[0].model.setPos(planets_poss[index][0],planets_poss[index][1],planets_poss[index][2])
+				planet[0].model.setScale(planets_poss[index][3])
+			for index,drone in enumerate(self.drones):
+				if index>=len(drones_poshpr):
+					break
+				drone.model.setPos(drones_poshpr[index][0:3])
+				drone.model.setHpr(drones_poshpr[index][3:6])
+				
 class Item(ShowBase):
 	def __init__(self,posVec:Vec3,scaleVec:float,modelPath:str,texPath:str):
 		self.model=base.loader.loadModel(modelPath)
@@ -374,12 +418,13 @@ class Wanderer(Item,Destructable):
 		self.target=getRandomPoint()
 		self.model.setBillboardPointWorld()
 	def loop(self):
-		self.model.lookAt(self.target)
-		self.trajectory=base.render.getRelativeVector(self.model,Vec3.forward())
-		self.trajectory.normalize()
-		self.model.setFluidPos(self.model.getPos()+self.trajectory*Game.settings["spaceship thrust"])
-		if getDistance(self.model,self.target)<100:
-			self.target=getRandomPoint()
+		if sType=="server":
+			self.model.lookAt(self.target)
+			self.trajectory=base.render.getRelativeVector(self.model,Vec3.forward())
+			self.trajectory.normalize()
+			self.model.setFluidPos(self.model.getPos()+self.trajectory*Game.settings["spaceship thrust"])
+			if getDistance(self.model,self.target)<100:
+				self.target=getRandomPoint()
 		self.model.lookAt(app.player.model)
 class Explosion():
 	def __init__(self,posVec:Vec3):
@@ -416,27 +461,37 @@ def recvall(sock):
 			break
 	return data
 def coms():
+	global newgamedata
 	if sType == "client":
-		message = input(" -> ")
-		while message.lower().strip() != 'bye':
-			active_socket.send(gamedata.encode())
+		while True:
+			time.sleep(.05)
 			data=recvall(active_socket).decode()
-			print('Received from server: ' + data)
-
-			message = input(" -> ")
-
+			if not data:
+				break
+			newgamedata=data
 		active_socket.close()
 	elif sType == "server":
 		while True:
+			time.sleep(.05)
 			data=recvall(conn).decode()
 			if not data:
 				break
-			print("from connected user: " + str(data))
-			data = input(' -> ')
+			newgamedata=data
+		conn.close()
+	return False
+def coms2():
+	if sType == "client":
+		while True:
+			time.sleep(.05)
+			active_socket.send(gamedata.encode())
+		active_socket.close()
+	elif sType == "server":
+		while True:
+			time.sleep(.05)
 			conn.send(gamedata.encode())
-
 		conn.close()
 	return False
 comms=threading.Thread(target = coms).start()
+comms=threading.Thread(target = coms2).start()
 app = Game()
 app.run()
