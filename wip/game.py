@@ -15,7 +15,12 @@ import keyboard
 import random
 import math
 import time
+import sys
 
+import socket
+import threading
+sType="idk"
+gamedata=[]
 def getRandomPoint():
 	return (random.uniform(-2000, 2000),random.uniform(-2000, 2000),random.uniform(-2000, 2000))
 def getDistance(model,point):
@@ -202,6 +207,8 @@ class Game(ShowBase):
 		self.universe.model.setP(self.universe.model.getP()+Game.settings["universe rotation"])
 		self.spaceStation.model.setR(self.spaceStation.model.getR()+.3)
 		self.killDeadDestructables()
+		global gamedata
+		gamedata=self.datify()
 		return Task.cont
 	def droneOrbitals(self,task):
 		for drone in self.drones:
@@ -301,6 +308,24 @@ class Game(ShowBase):
 			self.player.model.setR(self.player.model.getR()+Game.settings["spaceship rotation rate"])
 			if(self.player.model.getR()>360):
 				self.player.model.setR(self.player.model.getR()-360)
+	def datify(self):
+		player_poshpr=list(self.player.model.getPos())+list(self.player.model.getHpr())
+		wanderers_pos=[]
+		for wanderer in self.wanderers:
+			wanderers_pos+=[round(item,3) for item in list(wanderer.model.getPos())]
+		planets_poss=[]
+		for planet in self.planets:
+			planets_poss+=([round(item,3) for item in list(planet[0].model.getPos())+[float(planet[0].model.getScale()[0])]])
+		drones_poshpr=[]
+		for drone in self.drones:
+			drones_poshpr+=([round(item,3) for item in list(drone.model.getPos())+list(drone.model.getHpr())])
+		#print(str(player_poshpr)+"|"+str(wanderers_pos)+"|"+str(planets_poss)+"|"+str(drones_poshpr))
+		#return [self.player,self.wanderers,self.planets,self.drones]
+		return str(player_poshpr)+"|"+str(wanderers_pos)+"|"+str(planets_poss)+"|"+str(drones_poshpr)
+		#need player xyz,hpr
+		#need wanderers xyz
+		#need planets xyz, size
+		#need drones xyz,hpr
 class Item(ShowBase):
 	def __init__(self,posVec:Vec3,scaleVec:float,modelPath:str,texPath:str):
 		self.model=base.loader.loadModel(modelPath)
@@ -365,5 +390,53 @@ class Explosion():
 		if math.floor(completion):
 			self.card.model.removeNode()
 
+host = socket.gethostname()
+port = 5000
+
+
+try:
+	active_socket = socket.socket()
+	active_socket.connect((host, port))
+	sType="client"
+except ConnectionRefusedError:
+	active_socket = socket.socket()
+	active_socket.bind((host, port))
+	active_socket.listen(2)
+	conn, address = active_socket.accept()
+	sType="server"
+print(sType)
+def recvall(sock):
+	BUFF_SIZE = 4096 # 4 KiB
+	data = b''
+	while True:
+		part = sock.recv(BUFF_SIZE)
+		data += part
+		if len(part) < BUFF_SIZE:
+			# either 0 or end of data
+			break
+	return data
+def coms():
+	if sType == "client":
+		message = input(" -> ")
+		while message.lower().strip() != 'bye':
+			active_socket.send(gamedata.encode())
+			data=recvall(active_socket).decode()
+			print('Received from server: ' + data)
+
+			message = input(" -> ")
+
+		active_socket.close()
+	elif sType == "server":
+		while True:
+			data=recvall(conn).decode()
+			if not data:
+				break
+			print("from connected user: " + str(data))
+			data = input(' -> ')
+			conn.send(gamedata.encode())
+
+		conn.close()
+	return False
+comms=threading.Thread(target = coms).start()
 app = Game()
 app.run()
