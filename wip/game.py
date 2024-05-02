@@ -216,7 +216,10 @@ class Game(ShowBase):
 		self.spaceStation.model.setR(self.spaceStation.model.getR()+.3)
 		self.killDeadDestructables()
 		global gamedata
-		self.apply_data(newgamedata)
+		try:
+			self.apply_data(newgamedata)
+		except Exception:
+			print("error loading data")
 		gamedata=self.datify()
 		return Task.cont
 	def droneOrbitals(self,task):
